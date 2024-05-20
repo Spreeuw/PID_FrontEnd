@@ -34,20 +34,25 @@ import controlP5.*;
  * User spcification section
  **********************************************/
 int windowWidth = 1280;      // set the size of the 
-int windowHeight = 1024;     // form
+int windowHeight = 800;     // form
 
-float InScaleMin = 0;       // set the Y-Axis Min
-float InScaleMax = 1024;    // and Max for both
-float OutScaleMin = 0;      // the top and 
-float OutScaleMax = 255;    // bottom trends
+float InScaleMin = 0.0;       // set the Y-Axis Min
+float InScaleMax = 50.0;    // and Max for both
+int   InGridHorizontal = 10; 
+
+float OutScaleMin = -100.0;      // the top and 
+float OutScaleMax = 100.0;    // bottom trends
+int   OutGridHorizontal = 10;
 
 
-int windowSpan = 300000;    // number of mS into the past you want to display
-int refreshRate = 100;      // how often you want the graph to be reDrawn;
+int windowSpan = 3600000;    // number of mS into the past you want to display
+int refreshRate = 1000;      // how often you want the graph to be reDrawn;
 
 //float displayFactor = 1; //display Time as Milliseconds
 //float displayFactor = 1000; //display Time as Seconds
 float displayFactor = 60000; //display Time as Minutes
+
+boolean hasPrintedData = false;
 
 String outputFileName = ""; // if you'd like to output data to 
 // a file, specify the path here
@@ -68,13 +73,14 @@ float inputHeight = (windowHeight-70)*2/3;
 float outputTop = inputHeight+50;
 float outputHeight = (windowHeight-70)*1/3;
 
-float ioLeft = 150, ioWidth = windowWidth-ioLeft-50;
+float ioLeft = 170, ioWidth = windowWidth-ioLeft-50;
 float ioRight = ioLeft+ioWidth;
 float pointWidth= (ioWidth)/float(arrayLength-1);
 
-int vertCount = 10;
+int vertCount = 12;
 
 int nPoints = 0;
+int dataStartTime = 0;
 
 float Input, Setpoint, Output;
 
@@ -83,13 +89,14 @@ boolean justSent = true;
 
 Serial myPort;
 
-ControlP5 controlP5;
+ControlP5 cp5;
 controlP5.Button AMButton, DRButton;
 controlP5.Textlabel AMLabel, AMCurrent, InLabel, 
 OutLabel, SPLabel, PLabel, 
 ILabel, DLabel,DRLabel, DRCurrent;
 controlP5.Textfield SPField, InField, OutField, 
 PField, IField, DField;
+DropdownList serialPortsList;
 
 PrintWriter output;
 PFont AxisFont, TitleFont; 
@@ -97,35 +104,57 @@ PFont AxisFont, TitleFont;
 void setup()
 {
   frameRate(30);
-  size(1280 , 1024);
+  size(2000,2000); // ControlP5 only detects events within the size scope, so we need a size bigger than the surface size
+  surface.setSize(windowWidth, windowHeight);
 
-  println(Serial.list());                                           // * Initialize Serial
-  myPort = new Serial(this, Serial.list()[3], 9600);                //   Communication with
-  myPort.bufferUntil(10);                                           //   the Arduino
+  String[] portNames = Serial.list();
 
-  controlP5 = new ControlP5(this);                                  // * Initialize the various
-  SPField= controlP5.addTextfield("SetpointSetter",10,100,60,20).setInputFilter(ControlP5.FLOAT);         //   Buttons, Labels, and
-  InField = controlP5.addTextfield("InputSetter",10,150,60,20).setInputFilter(ControlP5.FLOAT);           //   Text Fields we'll be
-  OutField = controlP5.addTextfield("OutputSetter",10,200,60,20).setInputFilter(ControlP5.FLOAT);         //   using
-  PField = controlP5.addTextfield("Kp (Proportional)",10,275,60,20);//
-  IField = controlP5.addTextfield("Ki (Integral)",10,325,60,20);
-  DField = controlP5.addTextfield("Kd (Derivative)",10,375,60,20);
-  AMButton = controlP5.addButton("Toggle_AM",0.0,10,50,60,20);      //
-  AMLabel = controlP5.addTextlabel("AM","Manual",12,72);            //
-  AMCurrent = controlP5.addTextlabel("AMCurrent","Manual",80,65);   //
-  controlP5.addButton("Send_To_Arduino",0.0,10,475,120,20);         //
-  SPLabel=controlP5.addTextlabel("SP","3",80,103);                  //
-  InLabel=controlP5.addTextlabel("In","1",80,153);                  //
-  OutLabel=controlP5.addTextlabel("Out","2",80,203);                //
+  cp5 = new ControlP5(this); 
   
-  PLabel=controlP5.addTextlabel("P","4",80,278);                    //
-  ILabel=controlP5.addTextlabel("I","5",80,328);                    //
-  DLabel=controlP5.addTextlabel("D","6",80,378);                    //
+  // Initialize the various Buttons, Labels, and Text Fields we'll be using
+  
+  // Serial port selector
+  cp5.addScrollableList("serial ports").setPosition(10, 10).setWidth(130).setBarHeight(20);
+  for(int i = 0 ; i < portNames.length; i++) cp5.get(ScrollableList.class, "serial ports").addItem(portNames[i], i);
+  cp5.get(ScrollableList.class, "serial ports").setValue(0).close();
 
-  DRButton = controlP5.addButton("Toggle_DR",0.0,10,425,60,20);      //
-  DRLabel = controlP5.addTextlabel("DR","Direct",12,447);            //
-  DRCurrent = controlP5.addTextlabel("DRCurrent","Direct",80,440);   //
+  // Automatic/Manual toggle
+  AMButton = cp5.addButton("Toggle_AM").setPosition(10, 75).setSize(60,20);
+  AMLabel = cp5.addTextlabel("AM","Manual",12,97);
+  AMCurrent = cp5.addTextlabel("AMCurrent","Manual",80,80);
 
+  // Setpoint setter
+  SPField = cp5.addTextfield("SetpointSetter",10,125,60,20).setInputFilter(ControlP5.FLOAT);
+  SPLabel = cp5.addTextlabel("SP","3",80,131);
+  
+  // Input setter
+  InField = cp5.addTextfield("InputSetter",10,175,60,20).setInputFilter(ControlP5.FLOAT);
+  InLabel = cp5.addTextlabel("In","1",80,181);
+
+  // Output setter
+  OutField = cp5.addTextfield("OutputSetter",10,225,60,20).setInputFilter(ControlP5.FLOAT);
+  OutLabel=cp5.addTextlabel("Out","2",80,231);
+  
+  // Kp  
+  PField = cp5.addTextfield("Kp (Proportional)",10,300,60,20);
+  PLabel = cp5.addTextlabel("P","4",80,305);
+
+  // Ki
+  IField = cp5.addTextfield("Ki (Integral)",10,350,60,20);
+  ILabel = cp5.addTextlabel("I","5",80,355);
+
+  // Kd
+  DField = cp5.addTextfield("Kd (Derivative)",10,400,60,20);
+  DLabel = cp5.addTextlabel("D","6",80,405);
+
+  // Toggle Direct/Reverse
+  DRButton = cp5.addButton("Toggle_DR").setPosition(10, 450).setSize(60,20);
+  DRLabel = cp5.addTextlabel("DR","Direct",12,472);
+  DRCurrent = cp5.addTextlabel("DRCurrent","Direct",80,455);
+
+  cp5.addButton("Send_To_Arduino").setPosition(10, 500).setSize(120,20);
+  cp5.addButton("Clear data").setPosition(10, 525).setSize(120,20);
+  
   AxisFont = loadFont("axis.vlw");
   TitleFont = loadFont("Titles.vlw");
  
@@ -172,23 +201,26 @@ void drawGraph()
   textFont(AxisFont);
   
   //horizontal grid lines
-  int interval = (int)inputHeight/5;
-  for(int i=0;i<6;i++)
+  float interval = (int)inputHeight/InGridHorizontal;
+  for(int i=0;i<InGridHorizontal+1;i++)
   {
-    if(i>0&&i<5) line(ioLeft+1,inputTop+i*interval,ioRight-2,inputTop+i*interval);
-    text(str((InScaleMax-InScaleMin)/5*(float)(5-i)+InScaleMin),ioRight+5,inputTop+i*interval+4);
+    if(i>0&&i<InGridHorizontal) line(ioLeft+1,inputTop+int(i*interval),ioRight-2,inputTop+int(i*interval));
+    text(str((InScaleMax-InScaleMin)/InGridHorizontal*(float)(InGridHorizontal-i)+InScaleMin),ioRight+5,inputTop+int(i*interval)+4);
 
   }
-  interval = (int)outputHeight/5;
-  for(int i=0;i<6;i++)
+  interval = outputHeight/OutGridHorizontal;
+  for(int i=0;i<OutGridHorizontal+1;i++)
   {
-    if(i>0&&i<5) line(ioLeft+1,outputTop+i*interval,ioRight-2,outputTop+i*interval);
-    text(str((OutScaleMax-OutScaleMin)/5*(float)(5-i)+OutScaleMin),ioRight+5,outputTop+i*interval+4);
+    float gridLineValue = (OutScaleMax-OutScaleMin)/OutGridHorizontal*(float)(OutGridHorizontal-i)+OutScaleMin;
+    int gridStrokeColor = gridLineValue != 0.0 ? 210 : 0;
+    stroke(gridStrokeColor);
+    if(i>0&&i<OutGridHorizontal) line(ioLeft+1,outputTop+(int)i*interval,ioRight-2,outputTop+(int)i*interval);
+    text(str(gridLineValue),ioRight+5,outputTop+(int)i*interval+4);
   }
 
 
   //vertical grid lines and TimeStamps
-  int elapsedTime = millis();
+  int elapsedTime = millis()-dataStartTime;
   interval = (int)ioWidth/vertCount;
   int shift = elapsedTime*(int)ioWidth / windowSpan;
   shift %=interval;
@@ -198,13 +230,13 @@ void drawGraph()
   float timeInterval = (float)(iTimeInterval)/displayFactor;
   for(int i=0;i<vertCount;i++)
   {
-    int x = (int)ioRight-shift-2-i*interval;
+    int x = (int)ioRight-shift-2-int(i*interval);
 
     line(x,inputTop+1,x,inputTop+inputHeight-1);
-    line(x,outputTop+1,x,outputTop+outputHeight-1);    
+    line(x,outputTop+1,x,outputTop+outputHeight-1);
 
     float t = firstDisplay-(float)i*timeInterval;
-    if(t>=0)  text(str(t),x,outputTop+outputHeight+10);
+    if(t>=0)  text(str((int)t),x,outputTop+outputHeight+10);
   }
 
 
@@ -227,7 +259,7 @@ void drawGraph()
     if (nPoints < arrayLength) nPoints++;
 
     InputData[0] = int(inputHeight)-int(inputHeight*(Input-InScaleMin)/(InScaleMax-InScaleMin));
-    SetpointData[0] =int( inputHeight)-int(inputHeight*(Setpoint-InScaleMin)/(InScaleMax-InScaleMin));
+    SetpointData[0] = int(inputHeight)-int(inputHeight*(Setpoint-InScaleMin)/(InScaleMax-InScaleMin));
     OutputData[0] = int(outputHeight)-int(outputHeight*(Output-OutScaleMin)/(OutScaleMax-OutScaleMin));
   }
   //draw lines for the input, setpoint, and output
@@ -361,9 +393,9 @@ void drawGraph()
 
 void drawButtonArea()
 {
-  stroke(0);
+  stroke(100);
   fill(100);
-  rect(0, 0, ioLeft, windowHeight);
+  rect(0, 0, ioLeft-20, windowHeight);
 }
 
 void Toggle_AM() {
@@ -455,7 +487,7 @@ void serialEvent(Serial myPort)
     DRCurrent.setValue(trim(s[8]));
     if(justSent)                      // * if this is the first read
     {                                 //   since we sent values to 
-      SPField.setText(trim(s[1]));    //   the arduino,  take the
+      SPField.setText(trim(s[1])).setLock(false);    //   the arduino,  take the
       InField.setText(trim(s[2]));    //   current values and put
       OutField.setText(trim(s[3]));   //   them into the input fields
       PField.setText(trim(s[4]));     //
@@ -470,4 +502,60 @@ void serialEvent(Serial myPort)
 
     if(!madeContact) madeContact=true;
   }
+}
+
+public void controlEvent(ControlEvent theEvent) {
+  if (theEvent.isGroup()) {
+    // handle group events
+  } 
+  else if (theEvent.isController()) {
+    String eventName = theEvent.getController().getName();
+    switch(eventName) {
+      case "serial ports": 
+        int selected = round(+theEvent.getController().getValue());
+        String portName = cp5.get(ScrollableList.class, "serial ports").getItem(selected).get("name").toString();
+        setSerialPort(portName);
+        break;
+      case "Clear data": 
+        clearData();
+        break;
+    }
+  }
+}
+
+void setSerialPort(String portName) {
+  println("Switch to serial port : "+ portName);
+  //check if there's a serial port open already, if so, close it
+  if(myPort != null){
+    myPort.stop();
+    myPort = null;
+  }
+  //open the selected core
+  try{
+    myPort = new Serial(this,portName,9600);
+    myPort.bufferUntil(10);
+  }catch(Exception e){
+    System.err.println("Error opening serial port " + portName);
+  }
+}  
+
+void clearData() {
+  InputData = new int[arrayLength];
+  SetpointData = new int[arrayLength];
+  OutputData = new int[arrayLength];
+  nPoints = 0;
+  dataStartTime =  millis();
+
+}
+
+int getInputPosX (float value) {
+  return getGraphPos( (float) value, (int) ioWidth, (float) InScaleMin, (float) InScaleMax);
+}
+
+int getGraphPos(float value, int graphSize, float graphMin, float graphMax) {
+    float range = graphMax - graphMin;
+    float relativePosition = (value - graphMin) / range;
+    int graphPos = int(relativePosition * graphSize);
+    graphPos = constrain(graphPos, 0, graphSize);
+    return graphPos;
 }
