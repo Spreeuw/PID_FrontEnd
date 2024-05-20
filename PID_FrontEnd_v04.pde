@@ -36,13 +36,13 @@ import controlP5.*;
 int windowWidth = 1280;      // set the size of the 
 int windowHeight = 800;     // form
 
-float InScaleMin = 0.0;       // set the Y-Axis Min
-float InScaleMax = 50.0;    // and Max for both
-float InGridSpacing = 5.0; 
+float inScaleMin = 0.0;       // set the Y-Axis Min
+float inScaleMax = 50.0;    // and Max for both
+float inGridSpacing = 5.0; 
 
-float OutScaleMin = -100.0;      // the top and 
-float OutScaleMax = 100.0;    // bottom trends
-float OutGridSpacing = 25.0;
+float outScaleMin = -100.0;      // the top and 
+float outScaleMax = 100.0;    // bottom trends
+float outGridSpacing = 25.0;
 
 int windowSpan = 3600000;    // number of mS into the past you want to display
 int refreshRate = 1000;      // how often you want the graph to be reDrawn;
@@ -63,9 +63,9 @@ String outputFileName = ""; // if you'd like to output data to
 
 int nextRefresh;
 int arrayLength = (windowSpan / refreshRate)+2; // fencepost + 1 spare for smooth transition
-int[] InputData = new int[arrayLength];     //we might not need them this big, but
-int[] SetpointData = new int[arrayLength];  // this is worst case
-int[] OutputData = new int[arrayLength];
+int[] inputData = new int[arrayLength];     //we might not need them this big, but
+int[] setpointData = new int[arrayLength];  // this is worst case
+int[] outputData = new int[arrayLength];
 
 
 int inputTop = 35;
@@ -98,9 +98,7 @@ OutLabel, SPLabel, PLabel,
 ILabel, DLabel,DRLabel, DRCurrent;
 controlP5.Textfield SPField, InField, OutField, 
 PField, IField, DField;
-DropdownList serialPortsList;
 
-PrintWriter output;
 PFont AxisFont, TitleFont; 
 
 void setup()
@@ -203,18 +201,18 @@ void drawGraph()
   //GridLines and Titles
   textFont(AxisFont);
   //horizontal grid lines
-  for (float i = ceil(InScaleMin / InGridSpacing) * InGridSpacing; i <= InScaleMax; i += InGridSpacing) {
+  for (float i = ceil(inScaleMin / inGridSpacing) * inGridSpacing; i <= inScaleMax; i += inGridSpacing) {
     int gridStrokeColor = i != 0.0 ? 210 : 0;
     stroke(gridStrokeColor);
-    float y = (inputTop + inputHeight) - (i - InScaleMin) / (InScaleMax - InScaleMin) * inputHeight;
+    float y = (inputTop + inputHeight) - (i - inScaleMin) / (inScaleMax - inScaleMin) * inputHeight;
     line(ioLeft + 1, y, ioRight - 1, y);
     text(str(i), ioRight + 5, y + 4);
   }
 
-  for (float i = ceil(OutScaleMin / OutGridSpacing) * OutGridSpacing; i <= OutScaleMax; i += OutGridSpacing) {
+  for (float i = ceil(outScaleMin / outGridSpacing) * outGridSpacing; i <= outScaleMax; i += outGridSpacing) {
     int gridStrokeColor = i != 0.0 ? 210 : 127;
     stroke(gridStrokeColor);
-    float y = (outputTop + outputHeight) - (i - OutScaleMin) / (OutScaleMax - OutScaleMin) * outputHeight;
+    float y = (outputTop + outputHeight) - (i - outScaleMin) / (outScaleMax - outScaleMin) * outputHeight;
     line(ioLeft + 1, y, ioRight - 1, y);
     text(str(i), ioRight + 5, y + 4);
   }
@@ -247,18 +245,18 @@ void drawGraph()
     // If the buffer is full, shift all elements to the left to free the last position
     if (nPoints == arrayLength) {
         for (int i = 0; i < arrayLength - 1; ++i) {
-            InputData[i] = InputData[i + 1];
-            SetpointData[i] = SetpointData[i + 1];
-            OutputData[i] = OutputData[i + 1];
+            inputData[i] = inputData[i + 1];
+            setpointData[i] = setpointData[i + 1];
+            outputData[i] = outputData[i + 1];
         }
         dataStartTime += refreshRate;
     } else {
       nPoints++;
     }
 
-    InputData[nPoints-1] = getInputPosY(Input);
-    SetpointData[nPoints-1] = getInputPosY(Setpoint);
-    OutputData[nPoints-1] = getOutputPosY(Output);
+    inputData[nPoints-1] = getInputPosY(Input);
+    setpointData[nPoints-1] = getInputPosY(Setpoint);
+    outputData[nPoints-1] = getOutputPosY(Output);
     
   }
   //draw lines for the input, setpoint, and output
@@ -270,15 +268,15 @@ void drawGraph()
       int X2 = getInputPosX( dataStartTime+(float(i+1)*refreshRate) );
       //DRAW THE INPUT
       stroke(255,0,0);
-      line(X1, InputData[i], X2, InputData[i+1]);
+      line(X1, inputData[i], X2, inputData[i+1]);
   
       //DRAW THE SETPOINT
       stroke(0,255,0);
-      line(X1, SetpointData[i], X2, SetpointData[i+1]);
+      line(X1, setpointData[i], X2, setpointData[i+1]);
   
       //DRAW THE OUTPUT
       stroke(0,0,255);
-      line(X1, OutputData[i], X2, OutputData[i+1]);
+      line(X1, outputData[i], X2, outputData[i+1]);
     }
   }
   strokeWeight(1);
@@ -440,9 +438,9 @@ void setSerialPort(String portName) {
 }  
 
 void clearData() {
-  InputData = new int[arrayLength];
-  SetpointData = new int[arrayLength];
-  OutputData = new int[arrayLength];
+  inputData = new int[arrayLength];
+  setpointData = new int[arrayLength];
+  outputData = new int[arrayLength];
   nPoints = 0;
   dataStartTime =  millis();
   startTime = millis();
@@ -458,12 +456,12 @@ int getInputPosX (float value) {
 }
 
 int getInputPosY (float value) {
-  int relativePos = getGraphPos( (float) value, (int) inputHeight, (float) InScaleMin, (float) InScaleMax);
+  int relativePos = getGraphPos( (float) value, (int) inputHeight, (float) inScaleMin, (float) inScaleMax);
   return inputTop + inputHeight - relativePos;
 }
 
 int getOutputPosY (float value) {
-  int relativePos = getGraphPos( (float) value, (int) outputHeight, (float) OutScaleMin, (float) OutScaleMax);
+  int relativePos = getGraphPos( (float) value, (int) outputHeight, (float) outScaleMin, (float) outScaleMax);
   return outputTop + outputHeight - relativePos;
 }
 
