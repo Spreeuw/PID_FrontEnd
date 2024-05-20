@@ -433,7 +433,7 @@ void setSerialPort(String portName) {
     myPort = new Serial(this,portName,9600);
     myPort.bufferUntil(10);
   }catch(Exception e){
-    System.err.println("Error opening serial port " + portName + "try selecting a different port in the application");
+    System.err.println("Error opening serial port " + portName + ", try selecting a different port in the application");
   }
 }  
 
