@@ -38,11 +38,11 @@ int windowHeight = 800;     // form
 
 float InScaleMin = 0.0;       // set the Y-Axis Min
 float InScaleMax = 50.0;    // and Max for both
-int   InGridHorizontal = 10; 
+float InGridSpacing = 5.0; 
 
 float OutScaleMin = -100.0;      // the top and 
 float OutScaleMax = 100.0;    // bottom trends
-int   OutGridHorizontal = 10;
+float OutGridSpacing = 25.0;
 
 int windowSpan = 3600000;    // number of mS into the past you want to display
 int refreshRate = 1000;      // how often you want the graph to be reDrawn;
@@ -68,10 +68,10 @@ int[] SetpointData = new int[arrayLength];  // this is worst case
 int[] OutputData = new int[arrayLength];
 
 
-int inputTop = 25;
-int inputHeight = int((windowHeight-70)*2/3);
-int outputTop = inputHeight+50;
-int outputHeight = int((windowHeight-70)*1/3);
+int inputTop = 35;
+int inputHeight = int((windowHeight-90)*2/3);
+int outputTop = inputHeight+70;
+int outputHeight = int((windowHeight-90)*1/3);
 
 int ioLeft = 170;
 int ioWidth = windowWidth-ioLeft-50;
@@ -194,40 +194,42 @@ void drawGraph()
 
   //Section Titles
   textFont(TitleFont);
-  fill(255);
-  text("PID Input / Setpoint",(int)ioLeft+10,(int)inputTop-5);
-  text("PID Output",(int)ioLeft+10,(int)outputTop-5);
+  textSize(24);
+  fill(0,35,102);
+  text("Input / Setpoint",(int)ioLeft,(int)inputTop-8);
+  text("Output",(int)ioLeft,(int)outputTop-8);
 
 
   //GridLines and Titles
   textFont(AxisFont);
-  
   //horizontal grid lines
-  float interval = (float)inputHeight/InGridHorizontal;
-  for(int i=0;i<InGridHorizontal+1;i++)
-  {
-    if(i>0&&i<InGridHorizontal) line(ioLeft+1,inputTop+int(i*interval),ioRight-2,inputTop+int(i*interval));
-    text(str((InScaleMax-InScaleMin)/InGridHorizontal*(float)(InGridHorizontal-i)+InScaleMin),ioRight+5,inputTop+int(i*interval)+4);
-  }
-  
-  interval = (float)outputHeight/OutGridHorizontal;
-  for(int i=0;i<OutGridHorizontal+1;i++)
-  {
-    float gridLineValue = (OutScaleMax-OutScaleMin)/OutGridHorizontal*(float)(OutGridHorizontal-i)+OutScaleMin;
-    int gridStrokeColor = gridLineValue != 0.0 ? 210 : 0;
+  for (float i = ceil(InScaleMin / InGridSpacing) * InGridSpacing; i <= InScaleMax; i += InGridSpacing) {
+    int gridStrokeColor = i != 0.0 ? 210 : 0;
     stroke(gridStrokeColor);
-    if(i>0&&i<OutGridHorizontal) line(ioLeft+1,outputTop+(int)i*interval,ioRight-2,outputTop+(int)i*interval);
-    text(str(gridLineValue),ioRight+5,outputTop+(int)i*interval+4);
+    float y = (inputTop + inputHeight) - (i - InScaleMin) / (InScaleMax - InScaleMin) * inputHeight;
+    line(ioLeft + 1, y, ioRight - 1, y);
+    text(str(i), ioRight + 5, y + 4);
   }
 
+  for (float i = ceil(OutScaleMin / OutGridSpacing) * OutGridSpacing; i <= OutScaleMax; i += OutGridSpacing) {
+    int gridStrokeColor = i != 0.0 ? 210 : 127;
+    stroke(gridStrokeColor);
+    float y = (outputTop + outputHeight) - (i - OutScaleMin) / (OutScaleMax - OutScaleMin) * outputHeight;
+    line(ioLeft + 1, y, ioRight - 1, y);
+    text(str(i), ioRight + 5, y + 4);
+  }
+
+  
+  //vertical grid lines and TimeStamps
   if(nPoints > 0){   
-    //vertical grid lines and TimeStamps
     float intervalMs = displayFactor * timeGridSpacing;
 
     int now = millis();
     for(int i = startTime; i < now; i += (int)intervalMs){
       if(i >= max(dataStartTime, now - windowSpan)){
         int gridLineX = getInputPosX( i );
+        int gridStrokeColor = i-startTime != 0.0 ? 210 : 127;
+        stroke(gridStrokeColor);
         line(gridLineX,inputTop+1,gridLineX,inputTop+inputHeight-1);
         line(gridLineX,outputTop+1,gridLineX,outputTop+outputHeight-1);
         text(str((i-startTime) / displayFactor),gridLineX,outputTop+outputHeight+10);        
@@ -280,6 +282,13 @@ void drawGraph()
     }
   }
   strokeWeight(1);
+  
+  // cover up our operation
+  fill(0,0);
+  stroke(127);
+  rect(ioLeft, inputTop, ioWidth, inputHeight);
+  rect(ioLeft, outputTop, ioWidth, outputHeight);
+ 
 }
 
 void drawButtonArea()
@@ -426,7 +435,7 @@ void setSerialPort(String portName) {
     myPort = new Serial(this,portName,9600);
     myPort.bufferUntil(10);
   }catch(Exception e){
-    System.err.println("Error opening serial port " + portName);
+    System.err.println("Error opening serial port " + portName + "try selecting a different port in the application");
   }
 }  
 
