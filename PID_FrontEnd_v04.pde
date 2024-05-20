@@ -44,13 +44,13 @@ float OutScaleMin = -100.0;      // the top and
 float OutScaleMax = 100.0;    // bottom trends
 int   OutGridHorizontal = 10;
 
-
 int windowSpan = 3600000;    // number of mS into the past you want to display
 int refreshRate = 1000;      // how often you want the graph to be reDrawn;
 
 //float displayFactor = 1; //display Time as Milliseconds
 //float displayFactor = 1000; //display Time as Seconds
 float displayFactor = 60000; //display Time as Minutes
+int timeGridSpacing = 5;
 
 boolean hasPrintedData = false;
 
@@ -62,25 +62,27 @@ String outputFileName = ""; // if you'd like to output data to
  **********************************************/
 
 int nextRefresh;
-int arrayLength = windowSpan / refreshRate+1;
+int arrayLength = (windowSpan / refreshRate)+2; // fencepost + 1 spare for smooth transition
 int[] InputData = new int[arrayLength];     //we might not need them this big, but
 int[] SetpointData = new int[arrayLength];  // this is worst case
 int[] OutputData = new int[arrayLength];
 
 
-float inputTop = 25;
-float inputHeight = (windowHeight-70)*2/3;
-float outputTop = inputHeight+50;
-float outputHeight = (windowHeight-70)*1/3;
+int inputTop = 25;
+int inputHeight = int((windowHeight-70)*2/3);
+int outputTop = inputHeight+50;
+int outputHeight = int((windowHeight-70)*1/3);
 
-float ioLeft = 170, ioWidth = windowWidth-ioLeft-50;
-float ioRight = ioLeft+ioWidth;
+int ioLeft = 170;
+int ioWidth = windowWidth-ioLeft-50;
+int ioRight = ioLeft+ioWidth;
 float pointWidth= (ioWidth)/float(arrayLength-1);
 
 int vertCount = 12;
 
 int nPoints = 0;
 int dataStartTime = 0;
+int startTime = 0;
 
 float Input, Setpoint, Output;
 
@@ -158,8 +160,8 @@ void setup()
   AxisFont = loadFont("axis.vlw");
   TitleFont = loadFont("Titles.vlw");
  
-  nextRefresh=millis();
   if (outputFileName!="") output = createWriter(outputFileName);
+  
 }
 
 void SetpointSetter(String v) {
@@ -186,8 +188,8 @@ void drawGraph()
   //draw Base, gridlines
   stroke(0);
   fill(230);
-  rect(ioLeft, inputTop,ioWidth-1 , inputHeight);
-  rect(ioLeft, outputTop, ioWidth-1, outputHeight);
+  rect(ioLeft, inputTop, ioWidth, inputHeight);
+  rect(ioLeft, outputTop, ioWidth, outputHeight);
   stroke(210);
 
   //Section Titles
@@ -201,14 +203,14 @@ void drawGraph()
   textFont(AxisFont);
   
   //horizontal grid lines
-  float interval = (int)inputHeight/InGridHorizontal;
+  float interval = (float)inputHeight/InGridHorizontal;
   for(int i=0;i<InGridHorizontal+1;i++)
   {
     if(i>0&&i<InGridHorizontal) line(ioLeft+1,inputTop+int(i*interval),ioRight-2,inputTop+int(i*interval));
     text(str((InScaleMax-InScaleMin)/InGridHorizontal*(float)(InGridHorizontal-i)+InScaleMin),ioRight+5,inputTop+int(i*interval)+4);
-
   }
-  interval = outputHeight/OutGridHorizontal;
+  
+  interval = (float)outputHeight/OutGridHorizontal;
   for(int i=0;i<OutGridHorizontal+1;i++)
   {
     float gridLineValue = (OutScaleMax-OutScaleMin)/OutGridHorizontal*(float)(OutGridHorizontal-i)+OutScaleMin;
@@ -218,174 +220,63 @@ void drawGraph()
     text(str(gridLineValue),ioRight+5,outputTop+(int)i*interval+4);
   }
 
+  if(nPoints > 0){   
+    //vertical grid lines and TimeStamps
+    float intervalMs = displayFactor * timeGridSpacing;
 
-  //vertical grid lines and TimeStamps
-  int elapsedTime = millis()-dataStartTime;
-  interval = (int)ioWidth/vertCount;
-  int shift = elapsedTime*(int)ioWidth / windowSpan;
-  shift %=interval;
-
-  int iTimeInterval = windowSpan/vertCount;
-  float firstDisplay = (float)(iTimeInterval*(elapsedTime/iTimeInterval))/displayFactor;
-  float timeInterval = (float)(iTimeInterval)/displayFactor;
-  for(int i=0;i<vertCount;i++)
-  {
-    int x = (int)ioRight-shift-2-int(i*interval);
-
-    line(x,inputTop+1,x,inputTop+inputHeight-1);
-    line(x,outputTop+1,x,outputTop+outputHeight-1);
-
-    float t = firstDisplay-(float)i*timeInterval;
-    if(t>=0)  text(str((int)t),x,outputTop+outputHeight+10);
-  }
-
-
-  // add the latest data to the data Arrays.  the values need
-  // to be massaged to get them to graph correctly.  they 
-  // need to be scaled to fit where they're going, and 
-  // because 0, 0 is the top left, we need to flip the values.
-  // this is easier than having the user stand on their head
-  // to read the graph.
-  if(millis() > nextRefresh && madeContact)
-  {
-    nextRefresh += refreshRate;
-
-    for(int i=nPoints-1;i>0;i--)
-    {
-      InputData[i]=InputData[i-1];
-      SetpointData[i]=SetpointData[i-1];
-      OutputData[i]=OutputData[i-1];
+    int now = millis();
+    for(int i = startTime; i < now; i += (int)intervalMs){
+      if(i >= max(dataStartTime, now - windowSpan)){
+        int gridLineX = getInputPosX( i );
+        line(gridLineX,inputTop+1,gridLineX,inputTop+inputHeight-1);
+        line(gridLineX,outputTop+1,gridLineX,outputTop+outputHeight-1);
+        text(str((i-startTime) / displayFactor),gridLineX,outputTop+outputHeight+10);        
+      }
     }
-    if (nPoints < arrayLength) nPoints++;
+  }
+  // add the latest data to the data Arrays, storing the calculated Y coordinates
+  if(millis() > nextRefresh && madeContact) {
+    if (nPoints == 0) {
+      nextRefresh = dataStartTime = startTime = millis()+refreshRate;
+    } else {
+      nextRefresh = nextRefresh + refreshRate;
+    }
 
-    InputData[0] = int(inputHeight)-int(inputHeight*(Input-InScaleMin)/(InScaleMax-InScaleMin));
-    SetpointData[0] = int(inputHeight)-int(inputHeight*(Setpoint-InScaleMin)/(InScaleMax-InScaleMin));
-    OutputData[0] = int(outputHeight)-int(outputHeight*(Output-OutScaleMin)/(OutScaleMax-OutScaleMin));
+    // If the buffer is full, shift all elements to the left to free the last position
+    if (nPoints == arrayLength) {
+        for (int i = 0; i < arrayLength - 1; ++i) {
+            InputData[i] = InputData[i + 1];
+            SetpointData[i] = SetpointData[i + 1];
+            OutputData[i] = OutputData[i + 1];
+        }
+        dataStartTime += refreshRate;
+    } else {
+      nPoints++;
+    }
+
+    InputData[nPoints-1] = getInputPosY(Input);
+    SetpointData[nPoints-1] = getInputPosY(Setpoint);
+    OutputData[nPoints-1] = getOutputPosY(Output);
+    
   }
   //draw lines for the input, setpoint, and output
   strokeWeight(2);
-  for(int i=0; i<nPoints-2; i++)
-  {
-    int X1 = int(ioRight-2-float(i)*pointWidth);
-    int X2 = int(ioRight-2-float(i+1)*pointWidth);
-    boolean y1Above, y1Below, y2Above, y2Below;
-
-
-    //DRAW THE INPUT
-    boolean drawLine=true;
-    stroke(255,0,0);
-    int Y1 = InputData[i];
-    int Y2 = InputData[i+1];
-
-    y1Above = (Y1>inputHeight);                     // if both points are outside 
-    y1Below = (Y1<0);                               // the min or max, don't draw the 
-    y2Above = (Y2>inputHeight);                     // line.  if only one point is 
-    y2Below = (Y2<0);                               // outside constrain it to the limit, 
-    if(y1Above)                                     // and leave the other one untouched.
-    {                                               //
-      if(y2Above) drawLine=false;                   //
-      else if(y2Below) {                            //
-        Y1 = (int)inputHeight;                      //
-        Y2 = 0;                                     //
-      }                                             //
-      else Y1 = (int)inputHeight;                   //
-    }                                               //
-    else if(y1Below)                                //
-    {                                               //
-      if(y2Below) drawLine=false;                   //
-      else if(y2Above) {                            //
-        Y1 = 0;                                     //
-        Y2 = (int)inputHeight;                      //
-      }                                             //
-      else Y1 = 0;                                  //
-    }                                               //
-    else                                            //
-    {                                               //
-      if(y2Below) Y2 = 0;                           //
-      else if(y2Above) Y2 = (int)inputHeight;       //
-    }                                               //
-
-    if(drawLine)
+  if(nPoints > 1){
+    for(int i=0; i<nPoints-1; i++)
     {
-      line(X1,Y1+inputTop, X2, Y2+inputTop);
-    }
-
-    //DRAW THE SETPOINT
-    drawLine=true;
-    stroke(0,255,0);
-    Y1 = SetpointData[i];
-    Y2 = SetpointData[i+1];
-
-    y1Above = (Y1>(int)inputHeight);                // if both points are outside 
-    y1Below = (Y1<0);                               // the min or max, don't draw the 
-    y2Above = (Y2>(int)inputHeight);                // line.  if only one point is 
-    y2Below = (Y2<0);                               // outside constrain it to the limit, 
-    if(y1Above)                                     // and leave the other one untouched.
-    {                                               //
-      if(y2Above) drawLine=false;                   //
-      else if(y2Below) {                            //
-        Y1 = (int)(inputHeight);                    //
-        Y2 = 0;                                     //
-      }                                             //
-      else Y1 = (int)(inputHeight);                 //
-    }                                               //
-    else if(y1Below)                                //
-    {                                               //
-      if(y2Below) drawLine=false;                   //
-      else if(y2Above) {                            //
-        Y1 = 0;                                     //
-        Y2 = (int)(inputHeight);                    //
-      }                                             //
-      else Y1 = 0;                                  //
-    }                                               //
-    else                                            //
-    {                                               //
-      if(y2Below) Y2 = 0;                           //
-      else if(y2Above) Y2 = (int)(inputHeight);     //
-    }                                               //
-
-    if(drawLine)
-    {
-      line(X1, Y1+inputTop, X2, Y2+inputTop);
-    }
-
-    //DRAW THE OUTPUT
-    drawLine=true;
-    stroke(0,0,255);
-    Y1 = OutputData[i];
-    Y2 = OutputData[i+1];
-
-    y1Above = (Y1>outputHeight);                   // if both points are outside 
-    y1Below = (Y1<0);                              // the min or max, don't draw the 
-    y2Above = (Y2>outputHeight);                   // line.  if only one point is 
-    y2Below = (Y2<0);                              // outside constrain it to the limit, 
-    if(y1Above)                                    // and leave the other one untouched.
-    {                                              //
-      if(y2Above) drawLine=false;                  //
-      else if(y2Below) {                           //
-        Y1 = (int)outputHeight;                    //
-        Y2 = 0;                                    //
-      }                                            //
-      else Y1 = (int)outputHeight;                 //
-    }                                              //
-    else if(y1Below)                               //
-    {                                              //
-      if(y2Below) drawLine=false;                  //
-      else if(y2Above) {                           //
-        Y1 = 0;                                    //
-        Y2 = (int)outputHeight;                    //
-      }                                            //  
-      else Y1 = 0;                                 //
-    }                                              //
-    else                                           //
-    {                                              //
-      if(y2Below) Y2 = 0;                          //
-      else if(y2Above) Y2 = (int)outputHeight;     //
-    }                                              //
-
-    if(drawLine)
-    {
-      line(X1, outputTop + Y1, X2, outputTop + Y2);
+      int X1 = getInputPosX( dataStartTime+(float(i)*refreshRate) );
+      int X2 = getInputPosX( dataStartTime+(float(i+1)*refreshRate) );
+      //DRAW THE INPUT
+      stroke(255,0,0);
+      line(X1, InputData[i], X2, InputData[i+1]);
+  
+      //DRAW THE SETPOINT
+      stroke(0,255,0);
+      line(X1, SetpointData[i], X2, SetpointData[i+1]);
+  
+      //DRAW THE OUTPUT
+      stroke(0,0,255);
+      line(X1, OutputData[i], X2, OutputData[i+1]);
     }
   }
   strokeWeight(1);
@@ -451,7 +342,6 @@ void Send_To_Arduino()
 byte[] floatArrayToByteArray(float[] input)
 {
   int len = 4*input.length;
-  int index=0;
   byte[] b = new byte[4];
   byte[] out = new byte[len];
   ByteBuffer buf = ByteBuffer.wrap(b);
@@ -530,8 +420,9 @@ void setSerialPort(String portName) {
     myPort.stop();
     myPort = null;
   }
-  //open the selected core
+  //open the selected port
   try{
+    clearData();
     myPort = new Serial(this,portName,9600);
     myPort.bufferUntil(10);
   }catch(Exception e){
@@ -545,11 +436,26 @@ void clearData() {
   OutputData = new int[arrayLength];
   nPoints = 0;
   dataStartTime =  millis();
-
+  startTime = millis();
 }
 
 int getInputPosX (float value) {
-  return getGraphPos( (float) value, (int) ioWidth, (float) InScaleMin, (float) InScaleMax);
+  int now = millis();
+  int graphWidthMillis = constrain(now-dataStartTime,0,windowSpan);
+  int graphWidthPx = int( (float) graphWidthMillis * ioWidth / (float) windowSpan );
+  int graphStart = max(dataStartTime,now-windowSpan);
+  int relativePos = getGraphPos((float) value, (int) graphWidthPx, (float) graphStart, (float) now);
+  return ioRight - graphWidthPx + relativePos;
+}
+
+int getInputPosY (float value) {
+  int relativePos = getGraphPos( (float) value, (int) inputHeight, (float) InScaleMin, (float) InScaleMax);
+  return inputTop + inputHeight - relativePos;
+}
+
+int getOutputPosY (float value) {
+  int relativePos = getGraphPos( (float) value, (int) outputHeight, (float) OutScaleMin, (float) OutScaleMax);
+  return outputTop + outputHeight - relativePos;
 }
 
 int getGraphPos(float value, int graphSize, float graphMin, float graphMax) {
