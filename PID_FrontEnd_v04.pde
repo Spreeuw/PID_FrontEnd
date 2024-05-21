@@ -84,7 +84,7 @@ int nPoints = 0;
 int dataStartTime = 0;
 int startTime = 0;
 
-float Input, Setpoint, Output;
+float Input, Setpoint, Output, extraTemp;
 
 boolean madeContact =false;
 boolean justSent = true;
@@ -249,6 +249,7 @@ void drawGraph()
             inputData[i] = inputData[i + 1];
             setpointData[i] = setpointData[i + 1];
             outputData[i] = outputData[i + 1];
+            extraTempData[i] = extraTempData[i + 1];
         }
         dataStartTime += refreshRate;
     } else {
@@ -257,6 +258,7 @@ void drawGraph()
 
     inputData[nPoints-1] = getInputPosY(Input);
     setpointData[nPoints-1] = getInputPosY(Setpoint);
+    extraTempData[nPoints-1] = getInputPosY(extraTemp);
     outputData[nPoints-1] = getOutputPosY(Output);
   }
   //draw lines for the input, setpoint, and output
@@ -270,6 +272,10 @@ void drawGraph()
       stroke(255,0,0);
       line(X1, inputData[i], X2, inputData[i+1]);
   
+      //DRAW THE EXTRA TEMPERATURE
+      stroke(100,0,100);
+      line(X1, extraTempData[i], X2, extraTempData[i+1]);
+
       //DRAW THE SETPOINT
       stroke(0,255,0);
       line(X1, setpointData[i], X2, setpointData[i+1]);
@@ -366,6 +372,7 @@ byte[] floatArrayToByteArray(float[] input)
 void serialEvent(Serial myPort)
 {
   String read = myPort.readStringUntil(10);
+  //println(read);
   if(outputFileName!="") outputFile.print(str(millis())+ " "+read);
   String[] s = split(read, " ");
 
@@ -380,8 +387,9 @@ void serialEvent(Serial myPort)
     ILabel.setValue(trim(s[5]));      //
     DLabel.setValue(trim(s[6]));      //
     AMCurrent.setValue(trim(s[7]));   //
-    DRCurrent.setValue(trim(s[8]));
-    if(justSent)                      // * if this is the first read
+    DRCurrent.setValue(trim(s[8]));   //
+    extraTemp = float(s[9]);
+   if(justSent)                       // * if this is the first read
     {                                 //   since we sent values to 
       SPField.setText(trim(s[1])).setLock(false);    //   the arduino,  take the
       InField.setText(trim(s[2]));    //   current values and put
@@ -442,6 +450,8 @@ void clearData() {
   inputData = new int[arrayLength];
   setpointData = new int[arrayLength];
   outputData = new int[arrayLength];
+  extraTempData = new int[arrayLength];
+
   nPoints = 0;
   dataStartTime =  millis();
   startTime = millis();
