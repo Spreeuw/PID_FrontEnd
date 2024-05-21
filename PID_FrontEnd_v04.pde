@@ -66,7 +66,7 @@ int arrayLength = (windowSpan / refreshRate)+2; // fencepost + 1 spare for smoot
 int[] inputData = new int[arrayLength];     //we might not need them this big, but
 int[] setpointData = new int[arrayLength];  // this is worst case
 int[] outputData = new int[arrayLength];
-
+int[] extraTempData = new int[arrayLength];
 
 int inputTop = 35;
 int inputHeight = int((windowHeight-90)*2/3);
@@ -99,6 +99,7 @@ ILabel, DLabel,DRLabel, DRCurrent;
 controlP5.Textfield SPField, InField, OutField, 
 PField, IField, DField;
 
+PrintWriter outputFile;
 PFont AxisFont, TitleFont; 
 
 void setup()
@@ -158,7 +159,7 @@ void setup()
   AxisFont = loadFont("axis.vlw");
   TitleFont = loadFont("Titles.vlw");
  
-  if (outputFileName!="") output = createWriter(outputFileName);
+  if (outputFileName!="") outputFile = createWriter(outputFileName);
   
 }
 
@@ -257,7 +258,6 @@ void drawGraph()
     inputData[nPoints-1] = getInputPosY(Input);
     setpointData[nPoints-1] = getInputPosY(Setpoint);
     outputData[nPoints-1] = getOutputPosY(Output);
-    
   }
   //draw lines for the input, setpoint, and output
   strokeWeight(2);
@@ -366,7 +366,7 @@ byte[] floatArrayToByteArray(float[] input)
 void serialEvent(Serial myPort)
 {
   String read = myPort.readStringUntil(10);
-  if(outputFileName!="") output.print(str(millis())+ " "+read);
+  if(outputFileName!="") outputFile.print(str(millis())+ " "+read);
   String[] s = split(read, " ");
 
   if (s.length ==9)
