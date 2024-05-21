@@ -421,7 +421,7 @@ public void controlEvent(ControlEvent theEvent) {
 }
 
 void setSerialPort(String portName) {
-  println("Switch to serial port : "+ portName);
+  println("Switching to serial port : "+ portName);
   //check if there's a serial port open already, if so, close it
   if(myPort != null){
     myPort.stop();
@@ -430,8 +430,10 @@ void setSerialPort(String portName) {
   //open the selected port
   try{
     clearData();
+    println("one moment please...");
     myPort = new Serial(this,portName,9600);
     myPort.bufferUntil(10);
+    println("connected to " + portName);
   }catch(Exception e){
     System.err.println("Error opening serial port " + portName + ", try selecting a different port in the application");
   }
