@@ -369,8 +369,7 @@ void serialEvent(Serial myPort)
   if(outputFileName!="") outputFile.print(str(millis())+ " "+read);
   String[] s = split(read, " ");
 
-  if (s.length ==9)
-  {
+  if (s.length > 8) {
     Setpoint = float(s[1]);           // * pull the information
     Input = float(s[2]);              //   we need out of the
     Output = float(s[3]);             //   string and put it
